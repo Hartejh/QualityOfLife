@@ -1,0 +1,760 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+---
+title: "Project_101A"
+output: html_document
+date: "2025-03-02"
+---
+
+```{r}
+# Load data
+data <- read.csv("~/Desktop/R_Files/Stat 101a/quality_of_life_indices_by_country.csv", stringsAsFactors = FALSE)
+
+# Select relevant columns
+selected_col <- c("Quality.of.Life.Index", "Purchasing.Power.Index", "Safety.Index",
+                  "Health.Care.Index", "Cost.of.Living.Index", "Property.Price.to.Income.Ratio",
+                  "Traffic.Commute.Time.Index", "Pollution.Index")
+
+# Check if all columns exist in the dataset
+selected_data <- data[, intersect(selected_col, colnames(data))]
+
+# Generate scatterplot matrix
+pairs(selected_data, main="Scatterplot Matrix of Selected Variables")
+
+nrow(selected_data)
+```
+
+```{r}
+# Set up plotting area for 2 rows and 4 columns
+par(mfrow = c(2, 4))
+
+# List of variables to plot
+variables <- c("Quality.of.Life.Index", "Purchasing.Power.Index", "Safety.Index",
+               "Health.Care.Index", "Cost.of.Living.Index", "Property.Price.to.Income.Ratio",
+               "Traffic.Commute.Time.Index", "Pollution.Index")
+
+# Generate and display histograms
+for (var in variables) {
+  hist(data[[var]], 
+       main = paste("Distribution of", gsub("\\.", " ", var)), 
+       xlab = gsub("\\.", " ", var), 
+       col = "steelblue", 
+       border = "black")
+}
+
+# Reset layout to default (so it doesn't affect future plots)
+par(mfrow = c(1, 1))
+
+```
+
+
+
+```{r}
+model <- lm(Quality.of.Life.Index ~ ., data = selected_data)
+
+# Display model summary
+summary(model)
+
+anova(model)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(model)
+```
+
+
+
+#find alpha using boxcox and inverse reposne
+#boxcox
+```{r}
+
+apply(selected_data, 2, min)
+
+selected_data$Quality.of.Life.Index <- selected_data$Quality.of.Life.Index + abs(min(selected_data$Quality.of.Life.Index)) + 1
+selected_data$Purchasing.Power.Index <- selected_data$Purchasing.Power.Index + abs(min(selected_data$Purchasing.Power.Index)) + 1
+selected_data$Cost.of.Living.Index <- selected_data$Cost.of.Living.Index + abs(min(selected_data$Cost.of.Living.Index)) + 1
+selected_data$Property.Price.to.Income.Ratio <- selected_data$Property.Price.to.Income.Ratio + abs(min(selected_data$Property.Price.to.Income.Ratio)) + 1
+selected_data$Traffic.Commute.Time.Index <- selected_data$Traffic.Commute.Time.Index + abs(min(selected_data$Traffic.Commute.Time.Index)) + 1
+
+
+library(car)
+
+summary(transxy <- powerTransform(cbind(Quality.of.Life.Index, Purchasing.Power.Index, Safety.Index,
+                  Health.Care.Index, Cost.of.Living.Index, Property.Price.to.Income.Ratio,
+                  Traffic.Commute.Time.Index, Pollution.Index) ~ 1, data = selected_data))
+options(paged.print = FALSE)
+
+
+```
+
+
+
+```{r}
+# Apply Box-Cox recommended transformations to each variable
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.7974
+selected_data$Purchasing.Power.Index_transformed <- selected_data$Purchasing.Power.Index^0.4368
+selected_data$Safety.Index_transformed <- selected_data$Safety.Index^1.4803
+selected_data$Health.Care.Index_transformed <- selected_data$Health.Care.Index^1.8062
+selected_data$Cost.of.Living.Index_transformed <- selected_data$Cost.of.Living.Index^(-0.3159)
+selected_data$Property.Price.to.Income.Ratio_transformed <- selected_data$Property.Price.to.Income.Ratio^(-0.3293)
+selected_data$Traffic.Commute.Time.Index_transformed <- selected_data$Traffic.Commute.Time.Index^(-0.4467)
+selected_data$Pollution.Index_transformed <- selected_data$Pollution.Index^0.8510
+
+# Fit the regression model using transformed response variable
+model_transformed <- lm(Quality.of.Life.Index_transformed ~ Purchasing.Power.Index_transformed + Safety.Index_transformed +
+                         Health.Care.Index_transformed + Cost.of.Living.Index_transformed +
+                         Property.Price.to.Income.Ratio_transformed + Traffic.Commute.Time.Index_transformed +
+                         Pollution.Index_transformed, data = selected_data)
+
+# View the summary of the transformed model
+summary(model_transformed)
+
+# Generate diagnostic plots for model checking
+par(mfrow = c(2,2))
+plot(model_transformed)
+
+```
+
+#inversereposneplot
+```{r}
+library(car)
+
+# Fit the regression model using the original response variable (before Box-Cox transformation)
+m1 <- lm(Quality.of.Life.Index ~ Purchasing.Power.Index + Safety.Index +
+         Health.Care.Index + Cost.of.Living.Index + 
+         Property.Price.to.Income.Ratio + Traffic.Commute.Time.Index + 
+         Pollution.Index, data = selected_data)
+
+# Set plotting layout
+par(mfrow = c(1,1))
+
+# Generate the inverse response plot for the original response variable
+inverseResponsePlot(m1, key = TRUE)
+
+```
+
+```{r}
+# Apply the best transformation (λ = 0.5973745) to the response variable
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.85
+
+# Fit the linear model with the transformed response variable
+model_final <- lm(Quality.of.Life.Index_transformed ~ Purchasing.Power.Index + Safety.Index +
+                  Health.Care.Index + Cost.of.Living.Index + 
+                  Property.Price.to.Income.Ratio + Traffic.Commute.Time.Index + 
+                  Pollution.Index, data = selected_data)
+
+# View the summary of the new model
+summary(model_final)
+
+# Generate diagnostic plots to check residuals
+par(mfrow = c(2,2))
+plot(model_final)
+
+```
+
+
+```{r}
+library(leaps)
+library(MASS)
+library(car)
+
+# Load data
+data <- read.csv("~/Desktop/R_Files/Stat 101a/quality_of_life_indices_by_country.csv", stringsAsFactors = FALSE)
+
+# Select relevant columns
+selected_col <- c("Quality.of.Life.Index", "Purchasing.Power.Index", "Safety.Index",
+                  "Health.Care.Index", "Cost.of.Living.Index", "Property.Price.to.Income.Ratio",
+                  "Traffic.Commute.Time.Index", "Pollution.Index")
+
+# Ensure only existing columns are selected
+existing_cols <- intersect(selected_col, colnames(data))
+selected_data <- data[, existing_cols, drop = FALSE]
+
+# Convert non-numeric columns to numeric (if necessary)
+selected_data[] <- lapply(selected_data, function(x) as.numeric(as.character(x)))
+
+# Remove rows with missing values
+selected_data <- na.omit(selected_data)
+
+# Define response variable and predictors
+y <- selected_data$Quality.of.Life.Index
+X <- selected_data[, -1]  # Remove response variable from predictors
+
+# --- All Subsets Regression ---
+all_subsets <- regsubsets(as.matrix(X), y, nvmax = ncol(X))
+summary_all_subsets <- summary(all_subsets)
+
+# Extract Metrics
+adjr2 <- summary_all_subsets$adjr2
+cp <- summary_all_subsets$cp
+bic <- summary_all_subsets$bic
+rss <- summary_all_subsets$rss
+n <- nrow(selected_data)
+p_values <- 1:length(adjr2)
+
+# Calculate AIC and AICc
+aic_values <- n * log(rss / n) + 2 * (p_values + 1)
+aicc_values <- aic_values + (2 * (p_values + 1) * (p_values + 2)) / (n - p_values - 2)
+
+# Create Results Data Frame
+results_all_subsets <- data.frame(
+  Size = p_values,
+  AdjR2 = adjr2,
+  AIC = aic_values,
+  AICc = aicc_values,
+  BIC = bic
+)
+
+print(results_all_subsets)
+
+# --- Stepwise Regression ---
+
+# Define full model formula
+full_formula <- as.formula(paste("y ~", paste(names(X), collapse = " + ")))
+
+# 1. Forward Stepwise Regression
+
+# Forward AIC
+forwardAIC <- step(lm(y ~ 1, data = selected_data), direction = "forward", scope = full_formula)
+
+# Forward BIC
+forwardBIC <- step(lm(y ~ 1, data = selected_data), direction = "forward", scope = full_formula, k = log(n), trace = FALSE)
+
+# 2. Backward Stepwise Regression
+
+# Backward AIC
+backwardAIC <- step(lm(full_formula, data = selected_data), direction = "backward")
+
+# Backward BIC
+backwardBIC <- step(lm(full_formula, data = selected_data), direction = "backward", k = log(n))
+
+# Print Stepwise Regression Results
+print(summary(backwardAIC))
+print(summary(backwardBIC))
+print(summary(forwardAIC))
+print(summary(forwardBIC))
+
+BIC(lm(y ~ Pollution.Index, data = data))
+
+```
+
+
+```{r}
+# best_model <- lm(log(Quality.of.Life.Index + epsilon) ~ log(Purchasing.Power.Index + epsilon) + log(Safety.Index + epsilon) + log(Health.Care.Index + epsilon) + log(Cost.of.Living.Index + epsilon) + log(Property.Price.to.Income.Ratio + epsilon) + log(Traffic.Commute.Time.Index + epsilon) + log(Pollution.Index + epsilon), data = data)
+# 
+# par(mfrow=c(2,2))
+# plot(best_model)
+```
+
+#after applying trasnfomation on full model
+
+```{r}
+library(car)
+
+# Apply the best lambda (λ = 0.5973745) to transform the response variable
+data$Quality.of.Life.Index_transformed <- (data$Quality.of.Life.Index + abs(min(data$Quality.of.Life.Index)) + 1)^0.5973745
+
+# Fit the regression model with the transformed response variable
+best_model_transformed <- lm(Quality.of.Life.Index_transformed ~ Purchasing.Power.Index + Safety.Index + 
+                             Health.Care.Index + Cost.of.Living.Index + Property.Price.to.Income.Ratio + 
+                             Traffic.Commute.Time.Index + Pollution.Index, data = data)
+
+# Generate diagnostic plots to check residuals
+par(mfrow = c(2,2))
+plot(best_model_transformed)
+
+```
+
+```{r}
+data <- data[, selected_col]
+data <- na.omit(data)  # Handle missing values
+
+# Apply Box-Cox transformations to all variables based on the given lambda values
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.7974
+selected_data$Purchasing.Power.Index_transformed <- selected_data$Purchasing.Power.Index^0.4368
+selected_data$Safety.Index_transformed <- selected_data$Safety.Index^1.4803
+selected_data$Health.Care.Index_transformed <- selected_data$Health.Care.Index^1.8062
+selected_data$Cost.of.Living.Index_transformed <- selected_data$Cost.of.Living.Index^(-0.3159)
+selected_data$Property.Price.to.Income.Ratio_transformed <- selected_data$Property.Price.to.Income.Ratio^(-0.3293)
+selected_data$Traffic.Commute.Time.Index_transformed <- selected_data$Traffic.Commute.Time.Index^(-0.4467)
+selected_data$Pollution.Index_transformed <- selected_data$Pollution.Index^0.8510
+
+# Fit the regression model using all transformed variables
+full_model <- lm(Quality.of.Life.Index_transformed ~ 
+                 Purchasing.Power.Index_transformed + 
+                 Safety.Index_transformed + 
+                 Health.Care.Index_transformed + 
+                 Cost.of.Living.Index_transformed + 
+                 Property.Price.to.Income.Ratio_transformed + 
+                 Traffic.Commute.Time.Index_transformed + 
+                 Pollution.Index_transformed, data = selected_data)
+
+# Generate diagnostic plots to check assumptions
+par(mfrow = c(2,2))
+plot(full_model)
+
+summary(full_model)
+
+```
+
+```{r}
+data <- data[, selected_col]
+data <- na.omit(data)  # Handle missing values
+
+# Apply Box-Cox transformations to all variables based on the given lambda values
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.7974
+selected_data$Purchasing.Power.Index_transformed <- selected_data$Purchasing.Power.Index^0.4368
+selected_data$Safety.Index_transformed <- selected_data$Safety.Index^1.4803
+selected_data$Health.Care.Index_transformed <- selected_data$Health.Care.Index^1.8062
+# selected_data$Cost.of.Living.Index_transformed <- selected_data$Cost.of.Living.Index^(-0.3159)
+# selected_data$Property.Price.to.Income.Ratio_transformed <- selected_data$Property.Price.to.Income.Ratio^(-0.3293)
+# selected_data$Traffic.Commute.Time.Index_transformed <- selected_data$Traffic.Commute.Time.Index^(-0.4467)
+# selected_data$Pollution.Index_transformed <- selected_data$Pollution.Index^0.8510
+
+# Fit the regression model using all transformed variables
+full_model2 <- lm(Quality.of.Life.Index_transformed ~ 
+                 Purchasing.Power.Index_transformed + 
+                 Safety.Index_transformed + 
+                 Health.Care.Index_transformed,
+                 # Cost.of.Living.Index_transformed + 
+                 # Property.Price.to.Income.Ratio_transformed + 
+                 # Traffic.Commute.Time.Index_transformed + 
+                 # Pollution.Index_transformed, 
+                 data = selected_data)
+
+# Generate diagnostic plots to check assumptions
+par(mfrow = c(2,2))
+plot(full_model2)
+
+summary(full_model2)
+
+
+```
+
+```{r}
+# Select relevant columns and remove missing values
+data <- data[, selected_col]
+data <- na.omit(data)  
+
+# Apply log transformation to right-skewed variables
+selected_data$Purchasing.Power.Index_transformed <- log(selected_data$Purchasing.Power.Index)
+selected_data$Cost.of.Living.Index_transformed <- log(selected_data$Cost.of.Living.Index)
+selected_data$Property.Price.to.Income.Ratio_transformed <- log(selected_data$Property.Price.to.Income.Ratio)
+
+# Keep other transformations the same
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.7974
+selected_data$Safety.Index_transformed <- selected_data$Safety.Index^1.4803
+selected_data$Health.Care.Index_transformed <- selected_data$Health.Care.Index^1.8062
+selected_data$Traffic.Commute.Time.Index_transformed <- selected_data$Traffic.Commute.Time.Index^(-0.4467)
+selected_data$Pollution.Index_transformed <- selected_data$Pollution.Index^0.8510
+
+# Fit the regression model using all transformed variables
+full_model3 <- lm(Quality.of.Life.Index_transformed ~ 
+                 Purchasing.Power.Index_transformed + 
+                 Safety.Index_transformed + 
+                 Health.Care.Index_transformed + 
+                 Cost.of.Living.Index_transformed + 
+                 Property.Price.to.Income.Ratio_transformed + 
+                 Traffic.Commute.Time.Index_transformed + 
+                 Pollution.Index_transformed, data = selected_data)
+
+# Generate diagnostic plots to check assumptions
+par(mfrow = c(2,2))
+plot(full_model3)
+
+summary(full_model3)
+```
+
+
+```{r}
+# Select relevant columns and remove missing values
+data <- data[, selected_col]
+data <- na.omit(data)  
+
+selected_data$Purchasing.Power.Index_transformed <- sqrt(selected_data$Purchasing.Power.Index)
+selected_data$Cost.of.Living.Index_transformed <- sqrt(selected_data$Cost.of.Living.Index)
+selected_data$Property.Price.to.Income.Ratio_transformed <- sqrt(selected_data$Property.Price.to.Income.Ratio)
+
+# Keep other transformations the same
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.7974
+selected_data$Safety.Index_transformed <- selected_data$Safety.Index^1.4803
+selected_data$Health.Care.Index_transformed <- selected_data$Health.Care.Index^1.8062
+selected_data$Traffic.Commute.Time.Index_transformed <- selected_data$Traffic.Commute.Time.Index^(-0.4467)
+selected_data$Pollution.Index_transformed <- selected_data$Pollution.Index^0.8510
+
+# Fit the regression model using all transformed variables
+full_model4 <- lm(Quality.of.Life.Index_transformed ~ 
+                 Purchasing.Power.Index_transformed + 
+                 Safety.Index_transformed + 
+                 Health.Care.Index_transformed + 
+                 Cost.of.Living.Index_transformed + 
+                 Property.Price.to.Income.Ratio_transformed + 
+                 Traffic.Commute.Time.Index_transformed + 
+                 Pollution.Index_transformed, data = selected_data)
+
+# Generate diagnostic plots to check assumptions
+par(mfrow = c(2,2))
+plot(full_model4)
+
+summary(full_model4)
+
+```
+
+
+```{r}
+# Select relevant columns and remove missing values
+selected_data <- data[, c("Quality.of.Life.Index", 
+                          "Traffic.Commute.Time.Index", 
+                          "Pollution.Index", 
+                          "Safety.Index", 
+                          "Health.Care.Index")]
+
+selected_data <- na.omit(selected_data)  # Handle missing values
+
+# Fit the regression model using only the selected variables
+reduced_model <- lm(Quality.of.Life.Index ~ 
+                    Traffic.Commute.Time.Index + 
+                    Pollution.Index + 
+                    Safety.Index + 
+                    Health.Care.Index, 
+                    data = selected_data)
+
+# Generate diagnostic plots to check model assumptions
+par(mfrow = c(2,2))
+plot(reduced_model)
+
+# Print model summary
+summary(reduced_model)
+
+```
+
+
+# Best reduced model so far
+# the one with least predictors
+```{r}
+# Select relevant columns and remove missing values
+selected_data <- data[, c("Quality.of.Life.Index", 
+                          "Traffic.Commute.Time.Index", 
+                          "Pollution.Index", 
+                          "Safety.Index")]
+
+selected_data <- na.omit(selected_data)  # Handle missing values
+
+# Fit the regression model using only the selected variables
+reduced_model2 <- lm(Quality.of.Life.Index ~ 
+                    Traffic.Commute.Time.Index + 
+                    Pollution.Index + 
+                    Safety.Index, 
+                    data = selected_data)
+
+# Generate diagnostic plots to check model assumptions
+par(mfrow = c(2,2))
+plot(reduced_model2)
+
+# Print model summary
+summary(reduced_model2)
+
+```
+
+```{r}
+# Load necessary libraries
+library(MASS)
+library(car)
+
+# Select relevant columns (Only using Traffic Commute Time Index, Pollution Index, and Safety Index)
+selected_data <- data[, c("Quality.of.Life.Index", 
+                          "Traffic.Commute.Time.Index", 
+                          "Pollution.Index", 
+                          "Safety.Index")]
+
+# Remove rows with missing values
+selected_data <- na.omit(selected_data)
+
+# Define full and null models
+full_model <- lm(Quality.of.Life.Index ~ Traffic.Commute.Time.Index + Pollution.Index + Safety.Index, 
+                 data = selected_data)
+null_model <- lm(Quality.of.Life.Index ~ 1, data = selected_data)  # Null model (no predictors)
+
+# --- Forward Stepwise Regression (AIC) ---
+forwardAIC <- step(null_model, 
+                   scope = list(lower = null_model, upper = full_model), 
+                   direction = "forward", 
+                   trace = FALSE)
+
+# --- Backward Stepwise Regression (AIC) ---
+backwardAIC <- step(full_model, direction = "backward")
+
+# --- Both Directions (AIC) ---
+bothAIC <- step(null_model, 
+                scope = list(lower = null_model, upper = full_model), 
+                direction = "both", 
+                trace = FALSE)
+
+# Print results
+print(summary(forwardAIC))
+print(summary(backwardAIC))
+print(summary(bothAIC))
+
+# --- BIC-based Stepwise Selection ---
+n <- nrow(selected_data)  # Sample size
+
+# Forward Selection (BIC)
+forwardBIC <- step(null_model, 
+                   scope = list(lower = null_model, upper = full_model), 
+                   direction = "forward", 
+                   k = log(n),  # BIC penalty
+                   trace = FALSE)
+
+# Backward Selection (BIC)
+backwardBIC <- step(full_model, direction = "backward", k = log(n), trace = FALSE)
+
+# Both Directions (BIC)
+bothBIC <- step(null_model, 
+                scope = list(lower = null_model, upper = full_model), 
+                direction = "both", 
+                k = log(n), 
+                trace = FALSE)
+
+# Print results
+print(summary(forwardBIC))
+print(summary(backwardBIC))
+print(summary(bothBIC))
+
+# Compute BIC for a simple model with only Pollution Index
+BIC(lm(Quality.of.Life.Index ~ Pollution.Index, data = selected_data))
+
+```
+#applying box cox
+```{r}
+apply(selected_data, 2, min)
+
+selected_data$Quality.of.Life.Index <- selected_data$Quality.of.Life.Index + abs(min(selected_data$Quality.of.Life.Index)) + 1
+selected_data$Traffic.Commute.Time.Index <- selected_data$Traffic.Commute.Time.Index + abs(min(selected_data$Traffic.Commute.Time.Index)) + 1
+selected_data$Pollution.Index <- selected_data$Pollution.Index + abs(min(selected_data$Pollution.Index)) + 1
+selected_data$Safety.Index <- selected_data$Safety.Index + abs(min(selected_data$Safety.Index)) + 1
+
+library(car)
+
+summary(transxy <- powerTransform(cbind(Quality.of.Life.Index, Traffic.Commute.Time.Index, 
+                                        Pollution.Index, Safety.Index) ~ 1, data = selected_data))
+
+
+```
+
+```{r}
+# Select relevant columns and remove missing values
+selected_data <- selected_data[, c("Quality.of.Life.Index", 
+                                   "Traffic.Commute.Time.Index", 
+                                   "Pollution.Index", 
+                                   "Safety.Index")]
+
+selected_data <- na.omit(selected_data)  
+
+# Apply Box-Cox recommended transformations
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.7368
+selected_data$Traffic.Commute.Time.Index_transformed <- selected_data$Traffic.Commute.Time.Index^(-0.2820 )
+selected_data$Pollution.Index_transformed <- selected_data$Pollution.Index^0.9773
+selected_data$Safety.Index_transformed <- selected_data$Safety.Index^1.6621
+
+# Fit the regression model using the transformed variables
+full_model4 <- lm(Quality.of.Life.Index_transformed ~ 
+                 Traffic.Commute.Time.Index_transformed + 
+                 Pollution.Index_transformed + 
+                 Safety.Index_transformed, 
+                 data = selected_data)
+
+# Generate diagnostic plots to check assumptions
+par(mfrow = c(2,2))
+plot(full_model4)
+
+# Display model summary
+summary(full_model4)
+```
+#Now try applying Inverse Respinseplot
+```{r}
+library(car)
+
+# Fit the regression model using the original response variable (before Box-Cox transformation)
+m1 <- lm(Quality.of.Life.Index ~ Traffic.Commute.Time.Index + 
+         Pollution.Index + Safety.Index, data = selected_data)
+
+# Set plotting layout
+par(mfrow = c(1,1))
+
+# Generate the inverse response plot for the original response variable
+inverseResponsePlot(m1, key = TRUE)
+```
+
+```{r}
+# Select relevant columns and remove missing values
+selected_data <- selected_data[, c("Quality.of.Life.Index", 
+                                   "Traffic.Commute.Time.Index", 
+                                   "Pollution.Index", 
+                                   "Safety.Index")]
+
+selected_data <- na.omit(selected_data)  
+
+# Apply Box-Cox recommended transformations
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.830584
+selected_data$Traffic.Commute.Time.Index_transformed <- selected_data$Traffic.Commute.Time.Index
+selected_data$Pollution.Index_transformed <- selected_data$Pollution.Index
+selected_data$Safety.Index_transformed <- selected_data$Safety.Index
+
+# Fit the regression model using the transformed variables
+full_model4 <- lm(Quality.of.Life.Index_transformed ~ 
+                 Traffic.Commute.Time.Index_transformed + 
+                 Pollution.Index_transformed + 
+                 Safety.Index_transformed, 
+                 data = selected_data)
+
+# Generate diagnostic plots to check assumptions
+par(mfrow = c(2,2))
+plot(full_model4)
+
+# Display model summary
+summary(full_model4)
+
+```
+
+```{r}
+# Load necessary library
+library(nlme)
+
+# Fit initial linear model to obtain residuals
+initial_model <- lm(Quality.of.Life.Index_transformed ~ 
+                    Traffic.Commute.Time.Index + 
+                    Pollution.Index + 
+                    Safety.Index, 
+                    data = selected_data)
+
+# Estimate weights as inverse variance (1 / residual variance)
+weights <- 1 / lm(abs(residuals(initial_model)) ~ fitted(initial_model))$fitted.values^2
+
+# Fit Weighted Least Squares (WLS) model
+wls_model <- lm(Quality.of.Life.Index_transformed ~ 
+                Traffic.Commute.Time.Index + 
+                Pollution.Index + 
+                Safety.Index, 
+                data = selected_data, weights = weights)
+
+# Generate diagnostic plots
+par(mfrow = c(2,2))
+plot(wls_model)
+
+# Display model summary
+summary(wls_model)
+```
+
+#weighted least squares to full model
+```{r}
+# Load necessary library
+library(nlme)
+
+# Select relevant columns and remove missing values
+# Assuming selected_data is pre-loaded as instructed in original prompt
+# selected_data <- selected_data[, c("Quality.of.Life.Index",
+#                                     "Traffic.Commute.Time.Index",
+#                                     "Pollution.Index",
+#                                     "Safety.Index",
+#                                     "Purchasing.Power.Index",
+#                                     "Health.Care.Index",
+#                                     "Cost.of.Living.Index",
+#                                     "Property.Price.to.Income.Ratio")]
+# selected_data <- na.omit(selected_data)  # Remove missing values
+# Assuming these steps are done already on 'selected_data'
+
+# Apply transformation to response variable
+selected_data$Quality.of.Life.Index_transformed <- selected_data$Quality.of.Life.Index^1.830584
+
+# Fit initial OLS model
+initial_model <- lm(Quality.of.Life.Index_transformed ~ ., data = selected_data)
+
+# Estimate standard deviation of residuals as a function of fitted values
+std_dev_model <- lm(abs(residuals(initial_model)) ~ fitted(initial_model))
+print("Summary of std_dev_model:")
+print(summary(std_dev_model))
+
+# Inspect predicted standard deviations
+predicted_std_dev <- predict(std_dev_model, newdata = data.frame(fitted(initial_model)))
+print("Summary of predicted_std_dev:")
+print(summary(predicted_std_dev))
+
+# Compute weights: Inverse of estimated standard deviation squared
+weights <- 1 / (predicted_std_dev^2)
+
+# Handle missing/infinite weights
+print("Number of NA/infinite weights before handling:")
+print(sum(is.na(weights) | is.infinite(weights)))
+weights[is.na(weights) | is.infinite(weights)] <- median(weights, na.rm = TRUE)
+print("Number of NA/infinite weights after handling:")
+print(sum(is.na(weights) | is.infinite(weights)))
+print("Summary of weights after handling:")
+print(summary(weights))
+
+
+# Fit WLS model using weights
+wls_model <- lm(Quality.of.Life.Index_transformed ~ .,
+                data = selected_data, weights = weights)
+
+# Generate diagnostic plots to check variance stabilization
+par(mfrow = c(1,2))
+plot(fitted(wls_model), residuals(wls_model), xlab = "Fitted Values", ylab = "Residuals", main = "WLS Residuals vs Fitted")
+plot(fitted(wls_model), residuals(wls_model) / sqrt(weights), xlab = "Fitted Values", ylab = "Standardized Residuals", main = "Standardized Residuals")
+
+# Display model summary
+summary(wls_model)
+```
+
+```{r}
+interaction_model <- lm(Quality.of.Life.Index ~ Traffic.Commute.Time.Index * Pollution.Index + 
+                        Traffic.Commute.Time.Index * Safety.Index + 
+                        Pollution.Index * Safety.Index, data = selected_data)
+
+par(mfrow = c(2,2))
+plot(interaction_model)
+# Display model summary
+summary(interaction_model)
+
+```
+```{r}
+# Apply log transformation (adding 1 to avoid log(0) issues)
+selected_data$Quality.of.Life.Index_log <- log(selected_data$Quality.of.Life.Index + 1)
+selected_data$Traffic.Commute.Time.Index_log <- log(selected_data$Traffic.Commute.Time.Index + 1)
+selected_data$Pollution.Index_log <- log(selected_data$Pollution.Index + 1)
+selected_data$Safety.Index_log <- log(selected_data$Safety.Index + 1)
+
+# Fit the log-transformed linear model
+log_model <- lm(Quality.of.Life.Index_log ~ Traffic.Commute.Time.Index_log + 
+                Pollution.Index_log + Safety.Index_log, data = selected_data)
+
+# Generate diagnostic plots
+par(mfrow = c(2,2))
+plot(log_model)
+
+# Display model summary
+summary(log_model)
+```
+
+```{r}
+# Standardize variables (Z-score normalization)
+selected_data$Quality.of.Life.Index_scaled <- scale(selected_data$Quality.of.Life.Index)
+selected_data$Traffic.Commute.Time.Index_scaled <- scale(selected_data$Traffic.Commute.Time.Index)
+selected_data$Pollution.Index_scaled <- scale(selected_data$Pollution.Index)
+selected_data$Safety.Index_scaled <- scale(selected_data$Safety.Index)
+
+# Fit the standardized linear model
+scaled_model <- lm(Quality.of.Life.Index_scaled ~ Traffic.Commute.Time.Index_scaled + 
+                   Pollution.Index_scaled + Safety.Index_scaled, data = selected_data)
+
+# Generate diagnostic plots
+par(mfrow = c(2,2))
+plot(scaled_model)
+
+# Display model summary
+summary(scaled_model)
+
+```
+
